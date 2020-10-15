@@ -1,4 +1,3 @@
-import fnmatch
 import logging
 import datetime
 import matplotlib.pyplot as plt
@@ -7,7 +6,7 @@ import numpy as np
 import librosa
 from colorlog import ColoredFormatter
 import os
-from features import features
+from src.features import features
 
 LOG_LEVEL = logging.DEBUG
 LOGFORMAT = "%(log_color)s%(message)s%(reset)s"
@@ -29,7 +28,7 @@ if __name__ == '__main__':
 
     # Task 1 - TRAINING
     # Read the tracks based on their tagging.
-    train_path = 'data/'
+    train_path = '../data/'
     classes = ['Dynamicity']
     for c in classes:
         train_root = 'data/{}/'.format(c)
