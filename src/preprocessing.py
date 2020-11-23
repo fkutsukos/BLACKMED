@@ -1,6 +1,4 @@
 from sklearn import decomposition
-from sklearn.preprocessing import StandardScaler
-import numpy as np
 
 
 def pca(X_features, n_components):

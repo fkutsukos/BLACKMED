@@ -28,7 +28,7 @@ def compute_features_dataset(dataset, logger):
         audio = audio[int(len(audio) / 2): int(len(audio) / 2) + 10 * sample_rate]
 
         # normalize amplitude
-        audio = audio/audio.max()
+        audio = audio / audio.max()
 
         # Analysis variables:
         frame_length = int(np.floor(0.0213 * sample_rate))
@@ -47,7 +47,6 @@ def compute_features_dataset(dataset, logger):
         # Spectral rolloff
         spec_rolloff = librosa.feature.spectral_rolloff(S=mag_specgram, sr=sample_rate)
 
-
         # Perceptual loudness
         pow_specgram = np.where(pow_specgram == 0, np.finfo(np.float64).eps, pow_specgram)  # Numerical Stability
         freq = librosa.fft_frequencies(sr=sample_rate, n_fft=frame_length)
@@ -60,10 +59,8 @@ def compute_features_dataset(dataset, logger):
         loudness = np.mean(perceptually_weighted_melspecgram, axis=0, keepdims=True)
         # loudness = 10 * np.log10(loudness) # the conversion to db will be done on track stage
 
-
         # Bandwidth
         bandwidth = librosa.feature.spectral_bandwidth(S=mag_specgram, sr=sample_rate)
-
 
         # Spectral Flux
         spectral_flux = librosa.onset.onset_strength(S=mag_specgram, sr=frame_length)

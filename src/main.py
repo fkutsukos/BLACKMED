@@ -7,7 +7,6 @@ from colorlog import ColoredFormatter
 import warnings
 from numpy import loadtxt
 import audioFeatures
-import preprocessing
 import trainModels
 import joblib
 import numpy as np
@@ -38,11 +37,11 @@ datasets = ['Darkness', 'Dynamicity', 'Classicity']
 retraining = True
 featureExtraction = False
 configuration = True
-gmmTraining = False
+gmmTraining = True
 prediction = True
 
-pca_components = 2
-gmm_components = 10
+pca_components = 3
+gmm_components = 3
 
 if __name__ == '__main__':
     logger.info(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Starting BLCKMD')
@@ -77,7 +76,7 @@ if __name__ == '__main__':
 
                 # Applying normalization
                 X_features_training = loadtxt('lowLevelFeatures/X_{}.csv'.format(d), delimiter=',')
-                X_features_training_scaled = preprocessing.StandardScaler().fit_transform(X_features_training)
+                X_features_training_scaled = sklearn.preprocessing.StandardScaler().fit_transform(X_features_training)
 
                 # In the configuration step we decide which features to use to train the GMM
                 if configuration:
@@ -99,11 +98,14 @@ if __name__ == '__main__':
             str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Started Prediction ...')
 
         # Extract the audio features for the Prediction tracks
-        X_features_predict = audioFeatures.compute_features_dataset('Predict', logger)
+        # X_features_predict = audioFeatures.compute_features_dataset('Test', logger)
+        # savetxt('lowLevelFeatures/X_Prediction.csv', X_features_predict, delimiter=',')
 
-        high_level_features = []
+        X_features_predict = loadtxt('lowLevelFeatures/X_Prediction.csv', delimiter=',')
 
-        print('Starting', high_level_features)
+        # Create the final high level features matrix
+        n_files = X_features_predict.shape[0]
+        high_level_features = np.zeros((n_files, 3))
 
         # The Prediction data are standardized and reduced using PCA based on training data
         for index, d in enumerate(datasets):
@@ -122,6 +124,8 @@ if __name__ == '__main__':
             else:
                 Y_features_predict = X_features_predict_scaled
 
+            print('Prediction shape: ', Y_features_predict.shape)
+
             # Load the GMM trained on the specific Dataset Class
             filename = 'models/gmm_{}.sav'.format(d)
             gmm_model = joblib.load(filename)
@@ -129,8 +133,9 @@ if __name__ == '__main__':
             # predict using multivariate normal random variables
             # compute the pdf on the Predict data
             pdf = []
+
             n_components = len(gmm_model.weights_)
-            # print(gmm_model.covariances_)
+            print('weights:', gmm_model.weights_)
             for n in np.arange(n_components):
                 gauss = sp.stats.multivariate_normal(gmm_model.means_[n, :],
                                                      gmm_model.covariances_[n, :],
@@ -139,12 +144,14 @@ if __name__ == '__main__':
                 # print('gauss: ', gauss.pdf(Y_features_predict))
 
             pdf = np.sum(pdf, axis=0)
-            # print('the sum of gauss', pdf)
+            print('the sum of gauss', pdf)
             feature = np.log(1 + pdf)
-            # print('{} prediction: '.format(d), feature)
-            high_level_features.append(feature)
+            feature = feature[:,None]
+            print('{} prediction: '.format(d), feature)
 
-        high_level_features = np.array(high_level_features).reshape(1, -1)
+            high_level_features[:, index] = feature[:, 0]
+
         high_level_features = sklearn.preprocessing.normalize(high_level_features, axis=1)
+
         high_level_features = pd.DataFrame(data=high_level_features, columns=datasets)
-        print(high_level_features)
+        print(high_level_features.round(1))
