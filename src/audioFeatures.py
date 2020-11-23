@@ -25,7 +25,9 @@ def compute_features_dataset(dataset, logger):
         audio, sample_rate = librosa.load(os.path.join(dataset_root, file), sr=None)
 
         # cropping 10 seconds from the median sample of the audio file
-        audio = audio[int(len(audio) / 2): int(len(audio) / 2) + 10 * sample_rate]
+        # The 'Jazz' dataset is already composed of 10 sec samples, no need to crop
+        if dataset != 'Jazz':
+            audio = audio[ 3*int(len(audio) / 5): 3*int(len(audio) / 5) + 10 * sample_rate]
 
         # normalize amplitude
         audio = audio / audio.max()
