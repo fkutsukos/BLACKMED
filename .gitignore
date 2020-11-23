@@ -37,7 +37,7 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 
-# Unit test / coverage reports
+# Unit Test / coverage reports
 htmlcov/
 .tox/
 .nox/
@@ -133,3 +133,6 @@ dmypy.json
 
 #data folder
 data
+
+#lowLevelFeatures folder
+lowLevelFeatures
