@@ -15,9 +15,7 @@ from sklearn.feature_selection import mutual_info_regression
 plt.style.use('seaborn')
 
 
-def normalize_audio(x_, y_):
-    scaler = MinMaxScaler()
-    x_scaled = scaler.fit_transform(x_)
+def to_cast(x_, y_):
     return tf.cast(x_, tf.float32), tf.cast(y_, tf.uint8)
 
 

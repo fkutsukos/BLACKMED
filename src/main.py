@@ -16,6 +16,7 @@ import numpy as np
 import scipy as sp
 import pandas as pd
 import tensorflow as tf
+import os
 
 plt.style.use('seaborn')
 
@@ -47,12 +48,9 @@ if mfccs:
         ['MFCC1', 'MFCC2', 'MFCC3', 'MFCC4', 'MFCC5', 'MFCC6', 'MFCC7', 'MFCC8', 'MFCC9', 'MFCC10', 'MFCC11', 'MFCC12',
          'MFCC13'])
 
-# GMM Config
-gmmTraining = True
-featureSelection = False
-
-# DL Config
-mlpTraining = False
+# Training Type
+gmmTraining = False
+mlpTraining = True
 
 # PCA and GMM Configuration
 # Set pca_components=0 to search the number of components
@@ -60,6 +58,7 @@ configuration = True
 pca_components = 3
 
 prediction = True
+gmm_prediction = False
 
 if __name__ == '__main__':
     logger.info(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Starting BLCKMD')
@@ -81,7 +80,6 @@ if __name__ == '__main__':
                                                                          ' training...')
     # Task 2 - GMM Training using the updated data
     # a) Read the low level features and standardize the values.
-
     # b) Apply PCA to reduce the number of features
     # b) Fit the GGM using the reduced data
     # c) Store the GMM models to csv file, to be used in prediction
@@ -137,7 +135,10 @@ if __name__ == '__main__':
         print('X_train shape', X_train.shape)
         print('y_train.shape', y_train.shape)
 
+        # Normalize Audio
+
         X_train = MinMaxScaler().fit_transform(X_train)
+        X_test = MinMaxScaler().fit_transform(X_test)
 
         # Create Training Dataset object
         # ------------------------------
@@ -146,9 +147,13 @@ if __name__ == '__main__':
         # Shuffle
         train_dataset = train_dataset.shuffle(buffer_size=X_train.shape[0])
 
-        train_dataset = train_dataset.map(preprocessing.normalize_audio)
+        train_dataset = train_dataset.map(preprocessing.to_cast)
 
         train_dataset = train_dataset.map(preprocessing.to_categorical)
+
+        # iterator = iter(train_dataset)
+        # sample, target = next(iterator)
+        # print(target)
 
         # Divide in batches
         bs = 32
@@ -163,106 +168,133 @@ if __name__ == '__main__':
         # -------------------
         test_dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test))
 
-        test_dataset = test_dataset.map(preprocessing.normalize_audio)
+        test_dataset = test_dataset.map(preprocessing.to_cast)
 
         test_dataset = test_dataset.map(preprocessing.to_categorical)
 
         test_dataset = test_dataset.batch(1)
 
+        test_dataset = test_dataset.repeat()
+
         mlp_model = train.create_model()
 
         metrics = ['accuracy']
-        loss = tf.keras.losses.categorical_crossentropy
+        loss = tf.keras.losses.CategoricalCrossentropy()
         # Setting the initial Learning Rate:
-        lr = 1e-4
+        lr = 0.1
         # Setting the Optimizer to be used:
         optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
         mlp_model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
 
-        mlp_model.fit(X_train, y_train, epochs=200)
+        callbacks = []
+
+        ckpt_callback = tf.keras.callbacks.ModelCheckpoint(
+            filepath=os.path.join('checkpoints', 'mlp_model'),
+            save_best_only=True,
+            save_weights_only=False)  # False to save the model directly
+        callbacks.append(ckpt_callback)
+
+        early_stop = True
+        if early_stop:
+            es_callback = tf.keras.callbacks.EarlyStopping(monitor='val_loss',
+                                                           patience=50,
+                                                           restore_best_weights=True)
+            callbacks.append(es_callback)
+
+        history = mlp_model.fit(x=train_dataset, y=None,
+                                steps_per_epoch=int(np.ceil(X_train.shape[0] / bs)),
+                                validation_data=test_dataset,
+                                validation_steps=19,
+                                epochs=1000,
+                                callbacks=callbacks)
+
 
     if prediction:
         # Task 3 - Predict the Darkness, Dynamicity, Classicity high level features for the new tracks
         # Generating a high-level feature means to properly train the related Gaussian Mixture Model, exploiting audio
         # signals strictly related to the meaning of the descriptor. For each feature, the generation process is composed
         # of two steps, namely configuration and training:
-
         # TRAINING step. Once the subset of low-level features has been selected, the training phase allows to build the GMM exploiting
         # a set of audio signals that show characteristics belonging to the semantic meaning of the current high-level
         # feature.
-
         logger.info(
             str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Started Prediction ...')
-
         # Extract the audio features for the Prediction tracks
         X_features_predict, track_names = audioFeatures.compute_dataset_features('Predict', mfccs, features, logger)
-
         # Create the final high level features matrix
         n_files = X_features_predict.shape[0]
         high_level_features = np.zeros((n_files, 3))
 
-        # The Prediction data are standardized and reduced using PCA based on training data:
-        for index, d in enumerate(datasets):
-            # Apply normalization of the Prediction based on the Training data
-            X_features_training = loadtxt('lowLevelFeatures/X_{}.csv'.format(d), delimiter=',')
-            # X_features_training = pd.read_csv('lowLevelFeatures/X_{}.csv'.format(d), header=0, index_col=0)
-            scaler = sklearn.preprocessing.StandardScaler()
-            scaler.fit(X_features_training)
-            X_features_training_scaled = scaler.transform(X_features_training)
-            X_features_predict_scaled = scaler.transform(X_features_predict)
+        if gmm_prediction:
+            # The Prediction data are standardized and reduced using PCA based on training data:
+            for index, d in enumerate(datasets):
 
-            if configuration:
-                if pca_components == 0:
-                    _, pca_dataset_n_components = preprocessing.pca_components(X_features_training_scaled, d, logger)
-                    pca = sklearn.decomposition.PCA(n_components=pca_dataset_n_components, whiten=True)
+                # Apply normalization of the Prediction data based on the Training data
+                X_features_training = loadtxt('lowLevelFeatures/X_{}.csv'.format(d), delimiter=',')
+                # X_features_training = pd.read_csv('lowLevelFeatures/X_{}.csv'.format(d), header=0, index_col=0)
+                scaler = sklearn.preprocessing.StandardScaler()
+                scaler.fit(X_features_training)
+                X_features_training_scaled = scaler.transform(X_features_training)
+                X_features_predict_scaled = scaler.transform(X_features_predict)
+
+                if configuration:
+                    if pca_components == 0:
+                        _, pca_dataset_n_components = preprocessing.pca_components(X_features_training_scaled, d, logger)
+                        pca = sklearn.decomposition.PCA(n_components=pca_dataset_n_components, whiten=True)
+                    else:
+                        # apply PCA on the Prediction based on Training data
+                        pca = sklearn.decomposition.PCA(n_components=pca_components, whiten=True)
+
+                    pca.fit(X_features_training_scaled)
+                    Y_features_predict = pca.transform(X_features_predict_scaled)
                 else:
-                    # apply PCA on the Prediction based on Training data
-                    pca = sklearn.decomposition.PCA(n_components=pca_components, whiten=True)
+                    Y_features_predict = X_features_predict_scaled
 
-                pca.fit(X_features_training_scaled)
-                Y_features_predict = pca.transform(X_features_predict_scaled)
-            else:
-                Y_features_predict = X_features_predict_scaled
+                # Load the GMM trained on the specific Dataset Class
+                filename = 'models/gmm_{}.sav'.format(d)
+                gmm_model = joblib.load(filename)
 
-            # Load the GMM trained on the specific Dataset Class
-            filename = 'models/gmm_{}.sav'.format(d)
-            gmm_model = joblib.load(filename)
+                # predict using multivariate normal random variables
+                # compute the pdf on the Predict data
+                pdf = []
 
-            # predict using multivariate normal random variables
-            # compute the pdf on the Predict data
-            pdf = []
+                gmm_n_components = len(gmm_model.weights_)
+                print('gmm_model.n_components for {}: '.format(d), gmm_n_components)
+                print('gmm_model.covariance_type for {}: '.format(d), gmm_model.covariance_type)
+                print('gmm_model.covariances_.ndim for {}: '.format(d), gmm_model.covariances_.ndim)
+                for n in np.arange(gmm_n_components):
+                    if gmm_model.covariances_.ndim < 2:
+                        gauss = sp.stats.multivariate_normal(gmm_model.means_[n],
+                                                             gmm_model.covariances_[n],
+                                                             allow_singular=True)
 
-            gmm_n_components = len(gmm_model.weights_)
-            print('gmm_model.n_components for {}: '.format(d), gmm_n_components)
-            print('gmm_model.covariance_type for {}: '.format(d), gmm_model.covariance_type)
-            print('gmm_model.covariances_.ndim for {}: '.format(d), gmm_model.covariances_.ndim)
-            for n in np.arange(gmm_n_components):
-                if gmm_model.covariances_.ndim < 2:
-                    gauss = sp.stats.multivariate_normal(gmm_model.means_[n],
-                                                         gmm_model.covariances_[n],
-                                                         allow_singular=True)
+                    else:
+                        gauss = sp.stats.multivariate_normal(gmm_model.means_[n, :],
+                                                             gmm_model.covariances_[n, :],
+                                                             allow_singular=True)
+                    pdf.append(gmm_model.weights_[n] * gauss.pdf(Y_features_predict))
+                    # print('gauss: ', gauss.pdf(Y_features_predict))
 
-                else:
-                    gauss = sp.stats.multivariate_normal(gmm_model.means_[n, :],
-                                                         gmm_model.covariances_[n, :],
-                                                         allow_singular=True)
-                pdf.append(gmm_model.weights_[n] * gauss.pdf(Y_features_predict))
-                # print('gauss: ', gauss.pdf(Y_features_predict))
+                pdf = np.array(pdf).transpose()
 
-            pdf = np.array(pdf).transpose()
+                # pdf = np.array(gmm_model.predict_proba(Y_features_predict))
+                pdf_sum = np.sum(pdf, axis=-1)
 
-            # pdf = np.array(gmm_model.predict_proba(Y_features_predict))
-            pdf_sum = np.sum(pdf, axis=-1)
+                # Applying formula to convert probability to High level feature
+                high_level_feature = np.log(1 + pdf_sum)
+                # feature_predict_proba = np.log(1 + pdf_predict_proba_sum)
 
-            # Applying formula to convert probability to High level feature
-            high_level_feature = np.log(1 + pdf_sum)
-            # feature_predict_proba = np.log(1 + pdf_predict_proba_sum)
+                # Reshaping the result as column before inserting into the high level features
+                high_level_feature.reshape(-1, 1)
 
-            # Reshaping the result as column before inserting into the high level features
-            high_level_feature.reshape(-1, 1)
+                # print('{} prediction: '.format(d), feature)
+                high_level_features[:, index] = high_level_feature
+        else:
 
-            # print('{} prediction: '.format(d), feature)
-            high_level_features[:, index] = high_level_feature
+            X_features_predict = MinMaxScaler().fit_transform(X_features_predict)
+            mlp_model = tf.keras.models.load_model('checkpoints/mlp_model')
+            preds = mlp_model.predict(X_features_predict)
+            high_level_features = np.log(1 + preds)
 
         high_level_features = sklearn.preprocessing.normalize(high_level_features, axis=1)
 

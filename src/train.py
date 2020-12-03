@@ -8,19 +8,14 @@ def create_model():
     model = tf.keras.models.Sequential()
     SEED = 1234
     model.add(tf.keras.Input(shape=(12,)))
-    model.add(tf.keras.layers.Dense(units=10,
+    model.add(tf.keras.layers.Dense(units=128,
                                     activation='relu',
-                                    kernel_regularizer=tf.keras.regularizers.l2(0.1),
-                                    kernel_initializer=tf.keras.initializers.GlorotUniform(seed=SEED)))
-    model.add(tf.keras.layers.Dropout(0.5))
-    model.add(tf.keras.layers.Dense(units=10,
-                                    activation='relu',
-                                    kernel_regularizer=tf.keras.regularizers.l2(0.1),
-                                    kernel_initializer=tf.keras.initializers.GlorotUniform(seed=SEED)))
-    model.add(tf.keras.layers.Dropout(0.5))
+                                    kernel_initializer=tf.keras.initializers.GlorotUniform(seed=SEED),
+                                    kernel_regularizer=tf.keras.regularizers.l2(0.0001)))
     model.add(tf.keras.layers.Dense(units=3,
                                     activation='softmax',
-                                    kernel_initializer=tf.keras.initializers.GlorotUniform(seed=SEED)))
+                                    kernel_initializer=tf.keras.initializers.GlorotUniform(seed=SEED),
+                                    kernel_regularizer=tf.keras.regularizers.l2(0.0001)))
     return model
 
 
@@ -44,10 +39,8 @@ def train_gmm(Y_features, logger):
                 lowest_bic = bic[-1]
                 best_gmm = gmm
     logger.info(
-        str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' GMM covariance type "{}", with {} dimensions'.format(best_gmm.covariance_type,
-                                                                                                                            best_gmm.weights_.shape))
+        str(datetime.datetime.now().strftime(
+            "%Y-%m-%d %H:%M:%S")) + ' GMM covariance type "{}", with {} dimensions'.format(best_gmm.covariance_type,
+                                                                                           best_gmm.weights_.shape))
 
     return best_gmm
-
-
-
