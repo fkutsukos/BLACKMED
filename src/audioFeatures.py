@@ -11,9 +11,12 @@ def compute_dataset_features(dataset, mfccs, features, logger):
     dataset_files = [f for f in os.listdir(dataset_root) if f.endswith(('.wav', '.mp3', '.aiff', '.m4a'))]
     n_files = len(dataset_files)
     track_names = []
-    dataset_features = np.zeros((n_files, 12))
-    if mfccs:
-        dataset_features = np.zeros((n_files, 25))
+
+    logger.info(str(
+        datetime.datetime.now().strftime(
+            "%Y-%m-%d %H:%M:%S")) + ' Extracting ' + f'{len(features)} features for every track')
+
+    dataset_features = np.zeros((n_files, len(features)))
 
     # dataset_features_low_level = np.zeros((n_files, n_features))
     # track_features_low_level = np.zeros((n_bins, n_frames))
@@ -45,12 +48,12 @@ def compute_dataset_features(dataset, mfccs, features, logger):
 
         # Amplitude Normalization
 
-        # audio = np.expand_dims(audio, axis=1)
-        # min_max_scaler = MinMaxScaler()
-        # audio = min_max_scaler.fit_transform(audio)
-        # audio = audio.flatten()
+        audio = np.expand_dims(audio, axis=1)
+        min_max_scaler = MinMaxScaler()
+        audio = min_max_scaler.fit_transform(audio)
+        audio = audio.flatten()
 
-        audio = audio/audio.max()
+        #audio = audio/audio.max()
 
         # Analysis variables:
         frame_length = int(np.floor(0.0213 * sample_rate))

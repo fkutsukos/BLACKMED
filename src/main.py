@@ -8,6 +8,7 @@ import warnings
 from numpy import loadtxt
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import KFold
 import audioFeatures
 import train
 import preprocessing
@@ -19,6 +20,9 @@ import tensorflow as tf
 import os
 
 plt.style.use('seaborn')
+
+# fix random seed for reproducibility
+np.random.seed(7)
 
 # filter out warnings regarding librosa.load for mp3s
 warnings.filterwarnings('ignore', '.*PySoundFile failed. Trying audioread instead*', )
@@ -39,36 +43,51 @@ logging.basicConfig(filename='blckmd.log')
 
 datasets = ['Darkness', 'Dynamicity', 'Jazz']
 
-# Feature Extraction Config
+
+features = ['mSRO', 'mLOUD', 'mBW', 'mSFL', 'vSRO', 'vLOUD', 'vBW', 'vSFL', 'pSRO', 'pLOUD', 'pBW', 'pSFL', 'MFCC1',
+            'MFCC2', 'MFCC3', 'MFCC4', 'MFCC5', 'MFCC6', 'MFCC7', 'MFCC8', 'MFCC9', 'MFCC10', 'MFCC11', 'MFCC12',
+            'MFCC13']
+
 featureExtraction = False
-features = ['mSRO', 'mLOUD', 'mBW', 'mSFL', 'vSRO', 'vLOUD', 'vBW', 'vSFL', 'pSRO', 'pLOUD', 'pBW', 'pSFL']
-mfccs = False
-if mfccs:
-    features.append(
-        ['MFCC1', 'MFCC2', 'MFCC3', 'MFCC4', 'MFCC5', 'MFCC6', 'MFCC7', 'MFCC8', 'MFCC9', 'MFCC10', 'MFCC11', 'MFCC12',
-         'MFCC13'])
 
-# Training Type
-gmmTraining = False
-mlpTraining = True
-
-# PCA and GMM Configuration
-# Set pca_components=0 to search the number of components
 configuration = True
 pca_components = 3
 
-prediction = True
-gmm_prediction = False
+# Configure Training & Prediction (None, GMM , MLP)
+# ------------------------------
+training = None
+prediction = 'MLP'
+
+
+
+if training == 'GMM':
+    mfccs = False
+    features = features[:12]
+    gmm_prediction = True
+
+if training == 'MLP':
+    mfccs = True
+
+if training is not None:
+    featureExtraction = True
+
+if prediction == 'GMM':
+    mfccs = False
+    features = features[:12]
+
+if prediction == 'MLP':
+    mfccs = True
+
 
 if __name__ == '__main__':
     logger.info(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Starting BLCKMD')
 
     logger.info(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) +
-                ' FeatureExtraction: {}, GMM: {} , Prediction: {}'.format(featureExtraction, gmmTraining, prediction))
+                ' FeatureExtraction: {}, Training: {} , Prediction: {}'.format(featureExtraction, training, prediction))
 
-    # Task 1 - Low level feature extraction from the updated datasets to be used for training the GMMs
-    # a) We read the tracks based on their tagging,
-    # b) We compute the low level audio features and store them in csv files
+    # TASK 1 - Low level feature extraction
+    # 1.1 Iterate over the files by DYNAMICITY, DARKNESS, JAZZICITY
+    # 1.2 Extract audio features and save as .csv files
     if featureExtraction:
         # Building Labeled Features matrix for each category and then save features to csv file
         for index, d in enumerate(datasets):
@@ -78,19 +97,20 @@ if __name__ == '__main__':
         logger.info(
             str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Ended low level feature extraction for'
                                                                          ' training...')
-    # Task 2 - GMM Training using the updated data
-    # a) Read the low level features and standardize the values.
-    # b) Apply PCA to reduce the number of features
-    # b) Fit the GGM using the reduced data
-    # c) Store the GMM models to csv file, to be used in prediction
-    # for prediction
+    if training == 'GMM':
+        # TASK 2 - GMM Training
+        # 2.1 READ .csv low level features
+        # 2.2 STANDARDIZE and PCA to reduce dimensionality
+        # 2.3 FIT GGM
+        # 2.4 SAVE the trained GMM model
 
-    if gmmTraining:
         logger.info(
             str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Started GMM Training...')
 
         for index, d in enumerate(datasets):
 
+            # 2.1 READ .csv
+            # ------------------------------
             X_features_training = loadtxt('lowLevelFeatures/X_{}.csv'.format(d), delimiter=',')
             # X_features_training = pd.read_csv('lowLevelFeatures/X_{}.csv'.format(d), header=0, index_col=0)
 
@@ -103,7 +123,10 @@ if __name__ == '__main__':
             # features to use to train the GMM. For example, we may consider all the 12 descriptors related to the summary
             # vector or only a subset
 
+            # 2.2 STANDARDIZE & PCA
+            # ------------------------------
             if configuration:
+
                 X_features_training_scaled = sklearn.preprocessing.StandardScaler().fit_transform(X_features_training)
 
                 if pca_components == 0:
@@ -119,97 +142,86 @@ if __name__ == '__main__':
 
             logger.info(
                 str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Fitting GMM for {} dataset'.format(d))
+
+            # 2.3 FIT GMM
+            # ------------------------------
             gmm_model = train.train_gmm(Y_features_training, logger)
+
+            # 2.4 SAVE MODEL
+            # ------------------------------
             joblib.dump(gmm_model, 'models/gmm_{}.sav'.format(d))
             logger.info(
                 str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Saved ggm_{} model'.format(d))
 
-    if mlpTraining:
-        # Build X,y for train-test
+    if training == 'MLP':
+        # TASK 2 - MLP Training
+        # 2.1 GET TRAINING DATA AS X,y
+        # 2.2 SPLIT DATA to TRAINING and VALIDATION
+        # 2.3 NORMALIZE DATA
+        # 2.4 BUILD DATASETS FOR TRAINING AND VALIDATION
+        # 2.5 CREATE MODEL
+        # 2.6 FIT MLP
+
+        logger.info(
+            str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Started MLP Training...')
+
+        # 2.1 GET TRAINING DATA AS X,y
+        # ------------------------------
         X, y = preprocessing.build_x_y(datasets, logger)
         # preprocessing.wrapped_svm_method(X_train, X_test, y_train, y_test)
         # X_features_training_univariance = preprocessing.univariate_selection(X, y, logger)
+
+        # 2.2 SPLIT DATA
+        # ------------------------------
         # Sample 3 training sets while holding out 10%
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1, stratify=y)
 
-        print('X_train shape', X_train.shape)
-        print('y_train.shape', y_train.shape)
-
-        # Normalize Audio
-
+        # 2.3 NORMALIZE DATA
+        # ------------------------------
         X_train = MinMaxScaler().fit_transform(X_train)
         X_test = MinMaxScaler().fit_transform(X_test)
 
-        # Create Training Dataset object
+        # 2.4 BUILD DATASETS FOR TRAINING AND TEST
         # ------------------------------
         train_dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train))
-
         # Shuffle
         train_dataset = train_dataset.shuffle(buffer_size=X_train.shape[0])
-
+        # Cast values
         train_dataset = train_dataset.map(preprocessing.to_cast)
-
+        # One-hot-encoding
         train_dataset = train_dataset.map(preprocessing.to_categorical)
+        # Divide in batches
+        bs = 32
+        train_dataset = train_dataset.batch(bs)
+        # Repeat
+        train_dataset = train_dataset.repeat()
 
         # iterator = iter(train_dataset)
         # sample, target = next(iterator)
         # print(target)
 
-        # Divide in batches
-        bs = 32
-        train_dataset = train_dataset.batch(bs)
+        # REPEAT FOR VALID
+        # ------------------------------
+        valid_dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test))
+        valid_dataset = valid_dataset.map(preprocessing.to_cast)
+        valid_dataset = valid_dataset.map(preprocessing.to_categorical)
+        valid_dataset = valid_dataset.batch(1)
+        valid_dataset = valid_dataset.repeat()
 
-        # Repeat
-        # Without calling the repeat function the dataset
-        # will be empty after consuming all the images
-        train_dataset = train_dataset.repeat()
-
-        # Create Test Dataset
+        # 2.5 CREATE MLP MODEL
         # -------------------
-        test_dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test))
+        mlp_model = train.create_model(X_train.shape[1])
 
-        test_dataset = test_dataset.map(preprocessing.to_cast)
+        acc_per_fold = []
+        loss_per_fold = []
 
-        test_dataset = test_dataset.map(preprocessing.to_categorical)
+        # 2.6 FIT MLP
+        # -------------------
+        steps_per_epoch = int(np.ceil(X_train.shape[0] / bs))
+        validation_steps = int(X_test.shape[0])
+        train.train_mlp(mlp_model, train_dataset, valid_dataset, steps_per_epoch, validation_steps, logger)
 
-        test_dataset = test_dataset.batch(1)
-
-        test_dataset = test_dataset.repeat()
-
-        mlp_model = train.create_model()
-
-        metrics = ['accuracy']
-        loss = tf.keras.losses.CategoricalCrossentropy()
-        # Setting the initial Learning Rate:
-        lr = 0.1
-        # Setting the Optimizer to be used:
-        optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
-        mlp_model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
-
-        callbacks = []
-
-        ckpt_callback = tf.keras.callbacks.ModelCheckpoint(
-            filepath=os.path.join('checkpoints', 'mlp_model'),
-            save_best_only=True,
-            save_weights_only=False)  # False to save the model directly
-        callbacks.append(ckpt_callback)
-
-        early_stop = True
-        if early_stop:
-            es_callback = tf.keras.callbacks.EarlyStopping(monitor='val_loss',
-                                                           patience=50,
-                                                           restore_best_weights=True)
-            callbacks.append(es_callback)
-
-        history = mlp_model.fit(x=train_dataset, y=None,
-                                steps_per_epoch=int(np.ceil(X_train.shape[0] / bs)),
-                                validation_data=test_dataset,
-                                validation_steps=19,
-                                epochs=1000,
-                                callbacks=callbacks)
-
-
-    if prediction:
+    if prediction is not None:
         # Task 3 - Predict the Darkness, Dynamicity, Classicity high level features for the new tracks
         # Generating a high-level feature means to properly train the related Gaussian Mixture Model, exploiting audio
         # signals strictly related to the meaning of the descriptor. For each feature, the generation process is composed
@@ -218,14 +230,14 @@ if __name__ == '__main__':
         # a set of audio signals that show characteristics belonging to the semantic meaning of the current high-level
         # feature.
         logger.info(
-            str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Started Prediction ...')
+            str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Started Prediction with {} ...'.format(prediction))
         # Extract the audio features for the Prediction tracks
         X_features_predict, track_names = audioFeatures.compute_dataset_features('Predict', mfccs, features, logger)
         # Create the final high level features matrix
         n_files = X_features_predict.shape[0]
         high_level_features = np.zeros((n_files, 3))
 
-        if gmm_prediction:
+        if prediction == 'GMM':
             # The Prediction data are standardized and reduced using PCA based on training data:
             for index, d in enumerate(datasets):
 
@@ -239,7 +251,8 @@ if __name__ == '__main__':
 
                 if configuration:
                     if pca_components == 0:
-                        _, pca_dataset_n_components = preprocessing.pca_components(X_features_training_scaled, d, logger)
+                        _, pca_dataset_n_components = preprocessing.pca_components(X_features_training_scaled, d,
+                                                                                   logger)
                         pca = sklearn.decomposition.PCA(n_components=pca_dataset_n_components, whiten=True)
                     else:
                         # apply PCA on the Prediction based on Training data
@@ -289,7 +302,8 @@ if __name__ == '__main__':
 
                 # print('{} prediction: '.format(d), feature)
                 high_level_features[:, index] = high_level_feature
-        else:
+
+        if prediction == 'MLP':
 
             X_features_predict = MinMaxScaler().fit_transform(X_features_predict)
             mlp_model = tf.keras.models.load_model('checkpoints/mlp_model')
