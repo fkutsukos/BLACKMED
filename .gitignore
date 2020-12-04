@@ -136,3 +136,6 @@ data
 
 #lowLevelFeatures folder
 lowLevelFeatures
+
+#checkpoints folder
+checkpoints
