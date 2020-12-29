@@ -35,11 +35,11 @@ def compute_dataset_features(dataset, mfccs, features, logger):
                 datetime.datetime.now().strftime(
                     "%Y-%m-%d %H:%M:%S")) + ' Predicting - Analysing ' + f'{file}. {index + 1} / {n_files}')
             audio, sample_rate = librosa.load(os.path.join(dataset_root, file), sr=None)
-            audio = audio[3 * int(len(audio) / 5): 3 * int(len(audio) / 5) + 10 * sample_rate]
-            # audio_part1 = audio[2 * int(len(audio) / 5): 2 * int(len(audio) / 5) + 1 * sample_rate]
-            # audio_part2 = audio[3 * int(len(audio) / 5): 3 * int(len(audio) / 5) + 1 * sample_rate]
-            # audio_part3 = audio[4 * int(len(audio) / 5): 4 * int(len(audio) / 5) + 1 * sample_rate]
-            # audio = np.concatenate((audio_part1, audio_part2, audio_part3), axis=0)
+            # audio = audio[3 * int(len(audio) / 5): 3 * int(len(audio) / 5) + 10 * sample_rate]
+            audio_part1 = audio[2 * int(len(audio) / 5): 2 * int(len(audio) / 5) + 3 * sample_rate]
+            audio_part2 = audio[3 * int(len(audio) / 5): 3 * int(len(audio) / 5) + 4 * sample_rate]
+            audio_part3 = audio[4 * int(len(audio) / 5): 4 * int(len(audio) / 5) + 3 * sample_rate]
+            audio = np.concatenate((audio_part1, audio_part2, audio_part3), axis=0)
         else:
             logger.info(str(
                 datetime.datetime.now().strftime(

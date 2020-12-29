@@ -26,6 +26,7 @@ np.random.seed(7)
 
 # filter out warnings regarding librosa.load for mp3s
 warnings.filterwarnings('ignore', '.*PySoundFile failed. Trying audioread instead*', )
+warnings.filterwarnings('ignore', '.*tensorflow*', )
 
 LOG_LEVEL = logging.DEBUG
 LOGFORMAT = "%(log_color)s%(message)s%(reset)s"
@@ -37,7 +38,7 @@ stream.setFormatter(formatter)
 logger = logging.getLogger('colorlogger')
 logger.setLevel(LOG_LEVEL)
 logger.addHandler(stream)
-logging.basicConfig(filename='blckmd.log')
+logging.basicConfig(filename='logs/blckmd.log')
 
 # TODO: Create function to retrieve and analyse the next track online.
 
@@ -57,8 +58,6 @@ pca_components = 3
 # ------------------------------
 training = None
 prediction = 'MLP'
-
-
 
 if training == 'GMM':
     mfccs = False

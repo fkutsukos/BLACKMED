@@ -20,7 +20,7 @@ def create_model(input_shape):
     metrics = ['accuracy']
     loss = tf.keras.losses.CategoricalCrossentropy()
     # Setting the initial Learning Rate:
-    lr = 0.001
+    lr = 0.01
     # Setting the Optimizer to be used:
     optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
     model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
@@ -28,7 +28,7 @@ def create_model(input_shape):
     return model
 
 
-def train_mlp(mlp_model, train_dataset, valid_dataset, steps_per_epoch,validation_steps, logger):
+def train_mlp(mlp_model, train_dataset, valid_dataset, steps_per_epoch, validation_steps, logger):
     callbacks = []
 
     ckpt_callback = tf.keras.callbacks.ModelCheckpoint(
@@ -40,7 +40,7 @@ def train_mlp(mlp_model, train_dataset, valid_dataset, steps_per_epoch,validatio
     early_stop = True
     if early_stop:
         es_callback = tf.keras.callbacks.EarlyStopping(monitor='val_loss',
-                                                       patience=10,
+                                                       patience=20,
                                                        restore_best_weights=True)
         callbacks.append(es_callback)
     logger.info(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Training MLP...')
@@ -57,6 +57,7 @@ def train_mlp(mlp_model, train_dataset, valid_dataset, steps_per_epoch,validatio
 def train_gmm(Y_features, logger):
     bic = []
     lowest_bic = np.infty
+    best_gmm = None
     n_init = 100
     max_iter = 100
     n_components_range = range(1, 12)
@@ -66,6 +67,7 @@ def train_gmm(Y_features, logger):
             # Fit a Gaussian mixture with EM
             gmm = mixture.GaussianMixture(n_components=n_components,
                                           n_init=n_init,
+                                          max_iter=max_iter,
                                           covariance_type=cv_type,
                                           random_state=2)
             gmm.fit(Y_features)
