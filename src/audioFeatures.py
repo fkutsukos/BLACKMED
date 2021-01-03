@@ -1,5 +1,4 @@
 import datetime
-import pandas as pd
 import numpy as np
 import librosa
 import os
@@ -102,9 +101,9 @@ def compute_dataset_features(dataset, features, logger):
         # MFCCs
         mfcc = librosa.feature.mfcc(S=librosa.power_to_db(mel_specgram), sr=sample_rate, n_mfcc=13)
 
-        # Compute if the energy entropy of tracks. This information is not used during training
+        # Entropy of Energy
+        # This information is not used during training, only for prediction
         if dataset == 'Predict':
-            # Entropy of Energy
             signal_length = len(audio)
             num_frames = int(np.ceil((signal_length - frame_length) / hop_length) + 1)
             pad_signal_length = (num_frames - 1) * hop_length + frame_length
@@ -124,10 +123,9 @@ def compute_dataset_features(dataset, features, logger):
             indices = inframe_ind + frame_ind
 
             frames = pad_signal[indices]
-            frames.shape
-            t_frames = np.arange(0, num_frames) * (hop_length / sample_rate)  # starting time instant of each frame
-            t_frames_end = t_frames + (frame_length / sample_rate)  # #ending time instant of each frame
-            t_frames_ctr = 0.5 * (t_frames + t_frames_end)  # central instant of each frame
+            # t_frames = np.arange(0, num_frames) * (hop_length / sample_rate)  # starting time instant of each frame
+            # t_frames_end = t_frames + (frame_length / sample_rate)  # #ending time instant of each frame
+            # t_frames_ctr = 0.5 * (t_frames + t_frames_end)  # central instant of each frame
 
             frame_entropy = []
             num_frames = int(frames.shape[1])
@@ -144,7 +142,9 @@ def compute_dataset_features(dataset, features, logger):
                 frame_entropy.append(-(np.dot(np.log2(subframe_e), subframe_e)))
 
             has_beat.append(np.mean(frame_entropy))
-            tempo.append(librosa.beat.tempo(audio, sr=sample_rate, start_bpm=110, std_bpm=15, max_tempo=190))
+
+            # Tempo
+            tempo.append(librosa.beat.tempo(audio, sr=sample_rate, start_bpm=110.0, std_bpm=15, max_tempo=190))
 
         #  Means: the mean of the feature over the entire segment
         dataset_features[index, 0] = np.mean(spec_rolloff)
