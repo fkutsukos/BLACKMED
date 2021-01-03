@@ -44,6 +44,6 @@ def update_tracks(logger, high_level_features):
     url = "https://t0ciza9b.api.sanity.io/v1/data/mutate/production"
     response = requests.post(url=url, headers=headers, data=payload)
     logger.info(
-        str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Sanity response: {}'.format(response.text))
+        str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Sanity Response: {}'.format(response.text))
 
     return response
