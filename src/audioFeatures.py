@@ -6,20 +6,19 @@ import os
 from sklearn.preprocessing import MinMaxScaler
 
 
-def compute_dataset_features(dataset, mfccs, features, logger):
+def compute_dataset_features(dataset, features, logger):
     dataset_root = 'data/{}'.format(dataset)
     dataset_files = [f for f in os.listdir(dataset_root) if f.endswith(('.wav', '.mp3', '.aiff', '.m4a'))]
     n_files = len(dataset_files)
     track_names = []
+    has_beat = []
+    tempo = []
 
     logger.info(str(
         datetime.datetime.now().strftime(
-            "%Y-%m-%d %H:%M:%S")) + ' Extracting ' + f'{len(features)} features for every track')
+            "%Y-%m-%d %H:%M:%S")) + ' Extracting ' + f'{len(features)} features')
 
     dataset_features = np.zeros((n_files, len(features)))
-
-    # dataset_features_low_level = np.zeros((n_files, n_features))
-    # track_features_low_level = np.zeros((n_bins, n_frames))
 
     # Run over the dataset files and perform analysis
     logger.info(str(
@@ -53,7 +52,7 @@ def compute_dataset_features(dataset, mfccs, features, logger):
         audio = min_max_scaler.fit_transform(audio)
         audio = audio.flatten()
 
-        #audio = audio/audio.max()
+        # audio = audio/audio.max()
 
         # Analysis variables:
         frame_length = int(np.floor(0.0213 * sample_rate))
@@ -68,17 +67,16 @@ def compute_dataset_features(dataset, mfccs, features, logger):
                                 center=False)
         mag_specgram = np.abs(specgram)
         pow_specgram = mag_specgram ** 2
-        if mfccs:
-            mel_specgram = librosa.feature.melspectrogram(sr=sample_rate,
-                                                          S=pow_specgram,
-                                                          n_fft=frame_length,
-                                                          hop_length=hop_length,
-                                                          n_mels=40,
-                                                          fmin=0,
-                                                          fmax=sample_rate / 2,
-                                                          htk=True,
-                                                          norm=None)
 
+        mel_specgram = librosa.feature.melspectrogram(sr=sample_rate,
+                                                      S=pow_specgram,
+                                                      n_fft=frame_length,
+                                                      hop_length=hop_length,
+                                                      n_mels=40,
+                                                      fmin=0,
+                                                      fmax=sample_rate / 2,
+                                                      htk=True,
+                                                      norm=None)
         # Spectral rolloff
         spec_rolloff = librosa.feature.spectral_rolloff(S=mag_specgram, sr=sample_rate)
 
@@ -101,9 +99,52 @@ def compute_dataset_features(dataset, mfccs, features, logger):
         spectral_flux = librosa.onset.onset_strength(S=mag_specgram, sr=frame_length)
         spectral_flux = np.expand_dims(spectral_flux, axis=0)
 
-        if mfccs:
-            # MFCCs
-            mfcc = librosa.feature.mfcc(S=librosa.power_to_db(mel_specgram), sr=sample_rate, n_mfcc=13)
+        # MFCCs
+        mfcc = librosa.feature.mfcc(S=librosa.power_to_db(mel_specgram), sr=sample_rate, n_mfcc=13)
+
+        # Compute if the energy entropy of tracks. This information is not used during training
+        if dataset == 'Predict':
+            # Entropy of Energy
+            signal_length = len(audio)
+            num_frames = int(np.ceil((signal_length - frame_length) / hop_length) + 1)
+            pad_signal_length = (num_frames - 1) * hop_length + frame_length
+
+            # We need to add to the signal a #zeros that correspond to (signal_length - pad_signal_length)
+            z = np.zeros(pad_signal_length - signal_length)
+
+            pad_signal = np.append(audio, z)
+
+            # indexing matrix to understand which samples comprise each frame
+            inframe_ind = np.tile(np.arange(0, frame_length), (num_frames, 1)).T
+
+            # this matrix has the same shape as inframe_ind but shows how many samples we have jumped
+            frame_ind = np.tile(np.arange(0, num_frames * hop_length, hop_length), (frame_length, 1))
+
+            # If we add these two matrices, we get the index of the samples we are analyzing at each frame
+            indices = inframe_ind + frame_ind
+
+            frames = pad_signal[indices]
+            frames.shape
+            t_frames = np.arange(0, num_frames) * (hop_length / sample_rate)  # starting time instant of each frame
+            t_frames_end = t_frames + (frame_length / sample_rate)  # #ending time instant of each frame
+            t_frames_ctr = 0.5 * (t_frames + t_frames_end)  # central instant of each frame
+
+            frame_entropy = []
+            num_frames = int(frames.shape[1])
+            for frame in range(num_frames):
+                subframe_length = int(np.ceil((frames.shape[0]) / 10))
+                frame_energy = np.mean(frames[:, frame])
+                subframe_e = []
+                for subframe in range(10):
+                    subframe_energy = np.mean(
+                        frames[subframe * subframe_length:(subframe + 1) * subframe_length, frame])
+                    if subframe_energy > 0:
+                        subframe_e.append(subframe_energy / frame_energy)
+
+                frame_entropy.append(-(np.dot(np.log2(subframe_e), subframe_e)))
+
+            has_beat.append(np.mean(frame_entropy))
+            tempo.append(librosa.beat.tempo(audio, sr=sample_rate, start_bpm=110, std_bpm=15, max_tempo=190))
 
         #  Means: the mean of the feature over the entire segment
         dataset_features[index, 0] = np.mean(spec_rolloff)
@@ -120,9 +161,14 @@ def compute_dataset_features(dataset, mfccs, features, logger):
         dataset_features[index, 9] = np.max(loudness) / dataset_features[index, 1]
         dataset_features[index, 10] = np.max(bandwidth) / dataset_features[index, 2]
         dataset_features[index, 11] = np.max(spectral_flux) / dataset_features[index, 3]
-
         # MFCC mean
-        if mfccs:
-            dataset_features[index, 12:25] = np.mean(mfcc, axis=1)
+        dataset_features[index, 12:25] = np.mean(mfcc, axis=1)
+
     # dataset_features = pd.DataFrame(data=dataset_features, columns=features)
-    return dataset_features, track_names
+    return dataset_features, track_names, has_beat, tempo
+
+
+def check_beat(row):
+    if np.abs(row['Entropy']) > 0.2 or row['Dynamicity'] > 0.5:
+        return True
+    return False
