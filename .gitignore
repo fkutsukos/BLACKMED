@@ -143,4 +143,7 @@ checkpoints
 # logs folder
 logs
 
+#config folder
+config
+
 .DS_store

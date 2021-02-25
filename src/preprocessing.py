@@ -1,4 +1,4 @@
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
@@ -45,7 +45,7 @@ def build_x_y(datasets, logger):
 
 def wrapped_svm_method(X_train, X_test, y_train, y_test, logger):
     logger.info(
-        str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Wraped method... ')
+        str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Wrapped method... ')
     pipeline = Pipeline([
         ('select', SelectKBest(score_func=f_classif)),
         ('clf', SVC())]
@@ -73,7 +73,7 @@ def reduced_variance_selection(X_features, logger):
     feature_selection_variance_model = VarianceThreshold(threshold=(.9 * (1 - .9)))
     X_selected_features_variance = feature_selection_variance_model.fit_transform(X_features)
 
-    mask = feature_selection_variance_model.get_support()  # list of booleans
+    # mask = feature_selection_variance_model.get_support()  # list of booleans
     print("Reduced data set shape = ", X_selected_features_variance.shape)
     # print("     Selected features = ", X_selected_features_variance[mask])
     return X_selected_features_variance

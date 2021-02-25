@@ -18,6 +18,13 @@ def ts_float32(val):
 
 
 def update_tracks(logger, high_level_features):
+    """
+    This function is updating the algorithm fields for tracks on Sanity archive.
+    It is building a dictionary with the high_level_features to be used in JSON post message
+    :param logger: the logger instance used for writing logs to an external log file
+    :param high_level_features: the pandas dataframe with the data to be updated on sanity
+    :return: the response to the JSON post message from sanity
+    """
     logger.info(
         str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Updating Tracks on Sanity...')
     payload = {}
@@ -26,15 +33,17 @@ def update_tracks(logger, high_level_features):
     for track in range(high_level_features.shape[0]):
         patch = {"id": high_level_features["Id"][track].split(".")[0],
                  "set": {"algorithm.darkness": round(high_level_features["Darkness"][track], 2),
-                         "algorithm.dynamicity": (round(high_level_features["Dynamicity"][track], 2)),
-                         "algorithm.jazzicity": (round(high_level_features["Jazz"][track], 2)),
-                         "algorithm.hasBeat": bool(high_level_features["HasBeat"][track] == "True")}}
+                         "algorithm.dynamicity": round(high_level_features["Dynamicity"][track], 2),
+                         "algorithm.jazzicity": round(high_level_features["Jazz"][track], 2),
+                         "algorithm.hasBeat": bool(high_level_features["HasBeat"][track]),
+                         "algorithm.lufs": round(high_level_features["LUFS"][track], 2)}
+                 }
 
         patches.append({"patch": patch})
     payload["mutations"] = patches
     payload = json.dumps(payload, default=to_serializable)
 
-    with open("data/sanity.txt", "r") as file:
+    with open("config/sanity.txt", "r") as file:
         key = file.readlines()
 
     headers = {

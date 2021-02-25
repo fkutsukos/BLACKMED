@@ -3,19 +3,31 @@ import numpy as np
 import librosa
 import os
 from sklearn.preprocessing import MinMaxScaler
+import pyloudnorm
+import soundfile as sf
 
 
-def compute_dataset_features(dataset, features, logger):
+
+def compute_dataset_features(logger, dataset, features):
+    """
+    This function returns the LLF (low level features) from the audio samples of a tracks
+    :param logger: the logger instance used for writing logs to an external log file
+    :param dataset: the name of the dataset with the tracks to be analysed
+    :param features: the list of low level features names to be computed
+    :return:
+    dataset_features: np.ndarray: An array with average LLF for the tracks,
+    track_names: List: A list of with the name of the tracks,
+    has_beat: List: A list of the boolean values if the track has beats,
+    tempo: List: A list with the tempo of the tracks,
+    lufs: List: A list with the LUFS loudness of the tracks,
+    """
     dataset_root = 'data/{}'.format(dataset)
     dataset_files = [f for f in os.listdir(dataset_root) if f.endswith(('.wav', '.mp3', '.aiff', '.m4a'))]
     n_files = len(dataset_files)
     track_names = []
     has_beat = []
     tempo = []
-
-    logger.info(str(
-        datetime.datetime.now().strftime(
-            "%Y-%m-%d %H:%M:%S")) + ' Extracting ' + f'{len(features)} features')
+    lufs = []
 
     dataset_features = np.zeros((n_files, len(features)))
 
@@ -33,6 +45,11 @@ def compute_dataset_features(dataset, features, logger):
                 datetime.datetime.now().strftime(
                     "%Y-%m-%d %H:%M:%S")) + ' Predicting - Analysing ' + f'{file}. {index + 1} / {n_files}')
             audio, sample_rate = librosa.load(os.path.join(dataset_root, file), sr=None)
+
+            # LUFS require the analysis over the entire track
+            audio_complete, _ = librosa.load(os.path.join(dataset_root, file), sr=None, mono=False)
+            audio_complete = np.array(audio_complete).T
+
             # audio = audio[3 * int(len(audio) / 5): 3 * int(len(audio) / 5) + 10 * sample_rate]
             audio_part1 = audio[2 * int(len(audio) / 5): 2 * int(len(audio) / 5) + 3 * sample_rate]
             audio_part2 = audio[3 * int(len(audio) / 5): 3 * int(len(audio) / 5) + 4 * sample_rate]
@@ -146,6 +163,9 @@ def compute_dataset_features(dataset, features, logger):
             # Tempo
             tempo.append(librosa.beat.tempo(audio, sr=sample_rate, start_bpm=110.0, std_bpm=15, max_tempo=190))
 
+            # LUFS
+            lufs.append(get_integrated_lufs(audio_array=audio_complete, sample_rate=sample_rate))
+
         #  Means: the mean of the feature over the entire segment
         dataset_features[index, 0] = np.mean(spec_rolloff)
         dataset_features[index, 1] = np.mean(loudness)
@@ -165,10 +185,65 @@ def compute_dataset_features(dataset, features, logger):
         dataset_features[index, 12:25] = np.mean(mfcc, axis=1)
 
     # dataset_features = pd.DataFrame(data=dataset_features, columns=features)
-    return dataset_features, track_names, has_beat, tempo
+    return dataset_features, track_names, has_beat, tempo, lufs
 
 
 def check_beat(row):
-    if np.abs(row['Entropy']) > 0.2 or row['Dynamicity'] > 0.5:
+    """
+    This function computes if the track has a beat based on the value of dynamicity and entropy of energy
+    :param row: the dataframe row wit with the HLF of the track
+    :return: boolean value if the track has beat or not
+    """
+    if np.abs(row['Entropy']) > 0.2 or row['Dynamicity'] > 0.3:
         return True
     return False
+
+
+def get_integrated_lufs(audio_array, sample_rate, min_duration=0.5,
+                        filter_class='K-weighting', block_size=0.400):
+    """
+    Returns the integrated LUFS for a numpy array containing
+    audio samples.
+
+    For files shorter than 400 ms pyloudnorm throws an error. To avoid this,
+    files shorter than min_duration (by default 500 ms) are self-concatenated
+    until min_duration is reached and the LUFS value is computed for the
+    concatenated file.
+
+    Parameters
+    ----------
+    audio_array : np.ndarray
+        numpy array containing samples or path to audio file for computing LUFS
+    sample_rate : int
+        Sample rate of audio, for computing duration
+    min_duration : float
+        Minimum required duration for computing LUFS value. Files shorter than
+        this are self-concatenated until their duration reaches this value
+        for the purpose of computing the integrated LUFS. Caution: if you set
+        min_duration < 0.4, a constant LUFS value of -70.0 will be returned for
+        all files shorter than 400 ms.
+    filter_class : str
+        Class of weighting filter used.
+        - 'K-weighting' (default)
+        - 'Fenton/Lee 1'
+        - 'Fenton/Lee 2'
+        - 'Dash et al.'
+    block_size : float
+        Gating block size in seconds. Defaults to 0.400.
+
+    Returns
+    -------
+    loudness
+        Loudness in terms of LUFS
+    """
+    duration = audio_array.shape[0] / float(sample_rate)
+    if duration < min_duration:
+        ntiles = int(np.ceil(min_duration / duration))
+        audio_array = np.tile(audio_array, (ntiles, 1))
+    meter = pyloudnorm.Meter(
+        sample_rate, filter_class=filter_class, block_size=block_size
+    )
+    loudness = meter.integrated_loudness(audio_array)
+    # silent audio gives -inf, so need to put a lower bound.
+    loudness = max(loudness, -70)
+    return loudness
