@@ -34,7 +34,7 @@ def update_tracks(logger, high_level_features):
         patch = {"id": high_level_features["Id"][track].split(".")[0],
                  "set": {"algorithm.darkness": round(high_level_features["Darkness"][track], 2),
                          "algorithm.dynamicity": round(high_level_features["Dynamicity"][track], 2),
-                         "algorithm.jazzicity": round(high_level_features["Jazz"][track], 2),
+                         "algorithm.jazzicity": round(high_level_features["Jazzicity"][track], 2),
                          "algorithm.hasBeat": bool(high_level_features["HasBeat"][track]),
                          "algorithm.lufs": round(high_level_features["LUFS"][track], 2)}
                  }

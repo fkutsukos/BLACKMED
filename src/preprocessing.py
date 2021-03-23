@@ -12,10 +12,16 @@ import tensorflow as tf
 from sklearn.feature_selection import SelectKBest, f_classif
 from sklearn.feature_selection import VarianceThreshold
 from sklearn.feature_selection import mutual_info_regression
+import pandas as pd
+
 plt.style.use('seaborn')
 
 
-def to_cast(x_, y_):
+def to_cast_regression(x_, y_):
+    return tf.cast(x_, tf.float32), tf.cast(y_, tf.float32)
+
+
+def to_cast_classification(x_, y_):
     return tf.cast(x_, tf.float32), tf.cast(y_, tf.uint8)
 
 
@@ -24,9 +30,28 @@ def to_categorical(x_, y_):
     return x_, tf.one_hot(y_, depth=3)
 
 
-def build_x_y(datasets, logger):
+def build_x_y_regression(datasets, logger):
     logger.info(
-        str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Create X,y for Testing Selection ... ')
+        str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Create X,y for Regression...')
+
+    # Building the X
+    X = np.array([[]])
+    for index, d in enumerate(datasets):
+        X_dataset = loadtxt('lowLevelFeatures/X_{}.csv'.format(d), delimiter=',')
+        if index == 0:
+            X = X_dataset
+        else:
+            X = np.concatenate((X, X_dataset), axis=0)
+
+    # Building the y
+    df = pd.read_excel('highLevelFeatures/y.xlsx', index_col=None, usecols="B:D", engine='openpyxl')
+    y = df.dropna().to_numpy()
+    return X, y
+
+
+def build_x_y_classification(datasets, logger):
+    logger.info(
+        str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Create X,y for Classification... ')
     X = np.array([[]])
     y = np.array([[]])
     for index, d in enumerate(datasets):

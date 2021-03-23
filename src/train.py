@@ -5,7 +5,7 @@ import datetime
 import tensorflow as tf
 
 
-def create_model(input_shape):
+def create_model(input_shape, regression=False):
     model = tf.keras.models.Sequential()
     SEED = 1234
     model.add(tf.keras.Input(shape=(input_shape,)))
@@ -13,28 +13,46 @@ def create_model(input_shape):
                                     activation='relu',
                                     kernel_initializer=tf.keras.initializers.GlorotUniform(seed=SEED),
                                     kernel_regularizer=tf.keras.regularizers.l2(0.0001)))
-    model.add(tf.keras.layers.Dense(units=3,
-                                    activation='softmax',
-                                    kernel_initializer=tf.keras.initializers.GlorotUniform(seed=SEED),
-                                    kernel_regularizer=tf.keras.regularizers.l2(0.0001)))
-    metrics = ['accuracy']
-    loss = tf.keras.losses.CategoricalCrossentropy()
-    # Setting the initial Learning Rate:
+
+    # Regression settings
+    if regression:
+        model.add(tf.keras.layers.Dense(units=3,
+                                        activation='linear',
+                                        kernel_initializer=tf.keras.initializers.GlorotUniform(seed=SEED),
+                                        kernel_regularizer=tf.keras.regularizers.l2(0.0001)))
+
+        metrics = [tf.keras.metrics.MeanSquaredError()]
+        loss = tf.keras.losses.MeanSquaredError()
+
+    # Classification settings
+    else:
+        model.add(tf.keras.layers.Dense(units=3,
+                                        activation='softmax',
+                                        kernel_initializer=tf.keras.initializers.GlorotUniform(seed=SEED),
+                                        kernel_regularizer=tf.keras.regularizers.l2(0.0001)))
+        metrics = [tf.keras.metrics.CategoricalAccuracy()]
+        loss = tf.keras.losses.CategoricalCrossentropy()
+
+    # Global Settings
     lr = 0.01
-    # Setting the Optimizer to be used:
     optimizer = tf.keras.optimizers.Adam(learning_rate=lr)
     model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
 
     return model
 
 
-def train_mlp(mlp_model, train_dataset, valid_dataset, steps_per_epoch, validation_steps, logger):
+def train_mlp(mlp_model, train_dataset, valid_dataset, steps_per_epoch, validation_steps, logger, regression=False):
     callbacks = []
-
-    ckpt_callback = tf.keras.callbacks.ModelCheckpoint(
-        filepath=os.path.join('checkpoints', 'mlp_model'),
-        save_best_only=True,
-        save_weights_only=False)  # False to save the model directly
+    if regression:
+        ckpt_callback = tf.keras.callbacks.ModelCheckpoint(
+            filepath=os.path.join('checkpoints', 'mlp_model_regression'),
+            save_best_only=True,
+            save_weights_only=False)  # False to save the model directly
+    else:
+        ckpt_callback = tf.keras.callbacks.ModelCheckpoint(
+            filepath=os.path.join('checkpoints', 'mlp_model_class'),
+            save_best_only=True,
+            save_weights_only=False)  # False to save the model directly
     callbacks.append(ckpt_callback)
 
     early_stop = True

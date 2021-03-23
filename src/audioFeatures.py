@@ -4,18 +4,19 @@ import librosa
 import os
 from sklearn.preprocessing import MinMaxScaler
 import pyloudnorm
-import soundfile as sf
+import eyed3
 
 
-
-def compute_dataset_features(logger, dataset, features):
+def compute_dataset_features(logger, dataset, features, predict=False):
     """
     This function returns the LLF (low level features) from the audio samples of a tracks
     :param logger: the logger instance used for writing logs to an external log file
     :param dataset: the name of the dataset with the tracks to be analysed
     :param features: the list of low level features names to be computed
-    :return:
+    :param predict: this parameter
+    :return: multiple:
     dataset_features: np.ndarray: An array with average LLF for the tracks,
+    track_ids: List: A list of with the id of the tracks,
     track_names: List: A list of with the name of the tracks,
     has_beat: List: A list of the boolean values if the track has beats,
     tempo: List: A list with the tempo of the tracks,
@@ -23,9 +24,13 @@ def compute_dataset_features(logger, dataset, features):
     """
     dataset_root = 'data/{}'.format(dataset)
     dataset_files = [f for f in os.listdir(dataset_root) if f.endswith(('.wav', '.mp3', '.aiff', '.m4a'))]
+    dataset_files = sorted(dataset_files)
     n_files = len(dataset_files)
     track_names = []
+    track_ids = []
     has_beat = []
+    has_beat_std = []
+    has_beat_diff = []
     tempo = []
     lufs = []
 
@@ -37,19 +42,36 @@ def compute_dataset_features(logger, dataset, features):
             "%Y-%m-%d %H:%M:%S")) + ' Working on ' + f'{dataset} dataset of ' + f'{n_files} files')
     for index, file in enumerate(dataset_files):
 
-        track_names.append(file)
-        # loading the audio file
-        # when predicting, we are cropping 10 seconds from the median sample of the audio file
-        if dataset == 'Predict':
+        # Store the id and name of the track
+        if predict:
+            track = eyed3.load(os.path.join(dataset_root, file))
+            if track and track.tag:
+                track_names.append(track.tag.title)
+            else:
+                track_names.append('N/A')
+        track_ids.append(file)
+
+        # load the audio file samples
+        # In predict case, we are analysing only 10 seconds from the 2/5 , 3/5 and 4/5 of the track
+        # For LUFS we are using the whole length of the  track
+        # For determining if the track has beat we using the first 5-45 secs of the track
+        if predict:
             logger.info(str(
                 datetime.datetime.now().strftime(
                     "%Y-%m-%d %H:%M:%S")) + ' Predicting - Analysing ' + f'{file}. {index + 1} / {n_files}')
             audio, sample_rate = librosa.load(os.path.join(dataset_root, file), sr=None)
 
             # LUFS require the analysis over the entire track
-            audio_complete, _ = librosa.load(os.path.join(dataset_root, file), sr=None, mono=False)
-            audio_complete = np.array(audio_complete).T
+            audio_lufs, _ = librosa.load(os.path.join(dataset_root, file), sr=None, mono=False)
+            audio_lufs = np.array(audio_lufs).T
 
+            # hasBeat is computed only for the first 45 sec of the track
+            audio_hasBeat = audio[5 * sample_rate: 45 * sample_rate]
+            '''
+            audio_hasBeat = np.expand_dims(audio_hasBeat, axis=1)
+            audio_hasBeat = MinMaxScaler().fit_transform(audio_hasBeat)
+            audio_hasBeat = audio_hasBeat.flatten()
+            '''
             # audio = audio[3 * int(len(audio) / 5): 3 * int(len(audio) / 5) + 10 * sample_rate]
             audio_part1 = audio[2 * int(len(audio) / 5): 2 * int(len(audio) / 5) + 3 * sample_rate]
             audio_part2 = audio[3 * int(len(audio) / 5): 3 * int(len(audio) / 5) + 4 * sample_rate]
@@ -64,14 +86,13 @@ def compute_dataset_features(logger, dataset, features):
         # Amplitude Normalization
 
         audio = np.expand_dims(audio, axis=1)
-        min_max_scaler = MinMaxScaler()
-        audio = min_max_scaler.fit_transform(audio)
+        audio = MinMaxScaler().fit_transform(audio)
         audio = audio.flatten()
 
         # audio = audio/audio.max()
 
         # Analysis variables:
-        frame_length = int(np.floor(0.0213 * sample_rate))
+        frame_length = int(np.floor(0.0232 * sample_rate))
         hop_length = int(np.floor(frame_length / 2))
 
         # Spectrogram of the audio
@@ -120,15 +141,14 @@ def compute_dataset_features(logger, dataset, features):
 
         # Entropy of Energy
         # This information is not used during training, only for prediction
-        if dataset == 'Predict':
-            signal_length = len(audio)
+        if predict:
+            signal_length = len(audio_hasBeat)
             num_frames = int(np.ceil((signal_length - frame_length) / hop_length) + 1)
             pad_signal_length = (num_frames - 1) * hop_length + frame_length
 
             # We need to add to the signal a #zeros that correspond to (signal_length - pad_signal_length)
             z = np.zeros(pad_signal_length - signal_length)
-
-            pad_signal = np.append(audio, z)
+            pad_signal = np.append(audio_hasBeat, z)
 
             # indexing matrix to understand which samples comprise each frame
             inframe_ind = np.tile(np.arange(0, frame_length), (num_frames, 1)).T
@@ -148,6 +168,23 @@ def compute_dataset_features(logger, dataset, features):
             num_frames = int(frames.shape[1])
             for frame in range(num_frames):
                 subframe_length = int(np.ceil((frames.shape[0]) / 10))
+                frame_energy = np.sqrt(np.dot(frames[:, frame], frames[:, frame]) / len(frames[:, frame]))
+
+                if frame_energy > 0:
+                    subframes = []
+                    for subframe in range(10):
+                        subframe_samples = frames[subframe * subframe_length:(subframe + 1) * subframe_length, frame]
+                        subframe_energy = np.sqrt(np.dot(subframe_samples, subframe_samples) / len(subframe_samples))
+                        subframes.append(subframe_energy)
+                    subframe_e = subframes / frame_energy
+                    frame_entropy.append(-(np.dot(np.log2(subframe_e + 1e-16), subframe_e)))
+                else:
+                    frame_entropy.append(0)
+            '''
+            frame_entropy = []
+            num_frames = int(frames.shape[1])
+            for frame in range(num_frames):
+                subframe_length = int(np.ceil((frames.shape[0]) / 10))
                 frame_energy = np.mean(frames[:, frame])
                 subframe_e = []
                 for subframe in range(10):
@@ -157,14 +194,15 @@ def compute_dataset_features(logger, dataset, features):
                         subframe_e.append(subframe_energy / frame_energy)
 
                 frame_entropy.append(-(np.dot(np.log2(subframe_e), subframe_e)))
-
+            '''
             has_beat.append(np.mean(frame_entropy))
+            has_beat_std.append(np.std(frame_entropy))
 
             # Tempo
             tempo.append(librosa.beat.tempo(audio, sr=sample_rate, start_bpm=110.0, std_bpm=15, max_tempo=190))
 
             # LUFS
-            lufs.append(get_integrated_lufs(audio_array=audio_complete, sample_rate=sample_rate))
+            lufs.append(get_integrated_lufs(audio_array=audio_lufs, sample_rate=sample_rate))
 
         #  Means: the mean of the feature over the entire segment
         dataset_features[index, 0] = np.mean(spec_rolloff)
@@ -185,7 +223,7 @@ def compute_dataset_features(logger, dataset, features):
         dataset_features[index, 12:25] = np.mean(mfcc, axis=1)
 
     # dataset_features = pd.DataFrame(data=dataset_features, columns=features)
-    return dataset_features, track_names, has_beat, tempo, lufs
+    return dataset_features, track_ids, track_names, has_beat, has_beat_std, tempo, lufs
 
 
 def check_beat(row):
@@ -194,7 +232,7 @@ def check_beat(row):
     :param row: the dataframe row wit with the HLF of the track
     :return: boolean value if the track has beat or not
     """
-    if np.abs(row['Entropy']) > 0.2 or row['Dynamicity'] > 0.3:
+    if np.abs(row['Entropy']) > 0.05 and row['Entropy_STD'] >= 0.10 and row['Dynamicity']> 0.01:
         return True
     return False
 

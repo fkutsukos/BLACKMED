@@ -134,12 +134,6 @@ dmypy.json
 #data folder
 data
 
-#lowLevelFeatures folder
-lowLevelFeatures
-
-#checkpoints folder
-checkpoints
-
 # logs folder
 logs
 
