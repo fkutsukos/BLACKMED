@@ -28,9 +28,10 @@ def compute_dataset_features(logger, dataset, features, predict=False):
     n_files = len(dataset_files)
     track_names = []
     track_ids = []
-    has_beat = []
-    has_beat_std = []
-    has_beat_diff = []
+    entropy_energy_mean = []
+    entropy_energy_std = []
+    entropy_energy_diff_mean = []
+    entropy_energy_diff_std = []
     tempo = []
     lufs = []
 
@@ -195,9 +196,10 @@ def compute_dataset_features(logger, dataset, features, predict=False):
 
                 frame_entropy.append(-(np.dot(np.log2(subframe_e), subframe_e)))
             '''
-            has_beat.append(np.mean(frame_entropy))
-            has_beat_std.append(np.std(frame_entropy))
-
+            entropy_energy_mean.append(np.mean(frame_entropy))
+            entropy_energy_std.append(np.std(frame_entropy))
+            entropy_energy_diff_mean.append(np.mean(np.diff(frame_entropy)))
+            entropy_energy_diff_std.append(np.std(np.diff(frame_entropy)))
             # Tempo
             tempo.append(librosa.beat.tempo(audio, sr=sample_rate, start_bpm=110.0, std_bpm=15, max_tempo=190))
 
@@ -223,7 +225,7 @@ def compute_dataset_features(logger, dataset, features, predict=False):
         dataset_features[index, 12:25] = np.mean(mfcc, axis=1)
 
     # dataset_features = pd.DataFrame(data=dataset_features, columns=features)
-    return dataset_features, track_ids, track_names, has_beat, has_beat_std, tempo, lufs
+    return dataset_features, track_ids, track_names, entropy_energy_mean, entropy_energy_std, entropy_energy_diff_mean, entropy_energy_diff_std, tempo, lufs
 
 
 def check_beat(row):
@@ -232,7 +234,7 @@ def check_beat(row):
     :param row: the dataframe row wit with the HLF of the track
     :return: boolean value if the track has beat or not
     """
-    if np.abs(row['Entropy']) > 0.05 and row['Entropy_STD'] >= 0.10 and row['Dynamicity']> 0.01:
+    if np.abs(row['Entropy']) > 0.05 and row['Entropy_std'] > 0.10 and row['Dynamicity'] > 0.50:
         return True
     return False
 

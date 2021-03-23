@@ -47,7 +47,7 @@ features = ['mSRO', 'mLOUD', 'mBW', 'mSFL', 'vSRO', 'vLOUD', 'vBW', 'vSFL', 'pSR
 featureExtraction = False
 training = False
 predict = False
-regression = False
+regression = True
 
 if __name__ == '__main__':
     logger.info(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Starting BLCKMD')

@@ -21,7 +21,7 @@ def predict_tracks(logger, features, high_level_features_names, dataset, regress
     logger.info(
         str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Started Prediction...')
     # Extract the audio features for the Prediction tracks
-    X_features_predict, track_ids, track_names, has_beat, has_beat_std, tempo, lufs = audioFeatures.compute_dataset_features(
+    X_features_predict, track_ids, track_names, entropy_energy_mean, entropy_energy_std, entropy_energy_diff_mean, entropy_energy_diff_std, tempo, lufs = audioFeatures.compute_dataset_features(
         logger,
         dataset,
         features, predict=True)
@@ -46,8 +46,10 @@ def predict_tracks(logger, features, high_level_features_names, dataset, regress
     high_level_features = pd.DataFrame(data=high_level_features, columns=high_level_features_names)
     high_level_features['Id'] = track_ids
     high_level_features['Name'] = track_names
-    high_level_features['Entropy'] = has_beat
-    high_level_features['Entropy_STD'] = has_beat_std
+    high_level_features['Entropy'] = entropy_energy_mean
+    high_level_features['Entropy_std'] = entropy_energy_std
+    high_level_features['Entropy_diff'] = entropy_energy_diff_mean
+    high_level_features['Entropy_diff_std'] = entropy_energy_diff_std
     high_level_features['Tempo'] = tempo
     high_level_features['HasBeat'] = high_level_features.apply(lambda row: audioFeatures.check_beat(row), axis=1)
     high_level_features['LUFS'] = lufs
