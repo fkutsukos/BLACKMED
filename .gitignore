@@ -137,6 +137,15 @@ data
 # logs folder
 logs
 
+# lowLevelFeatures folder
+lowLevelFeatures
+
+# scalers folder
+scalers
+
+# highlevelFeatures folder
+highLevelFeatures
+
 #config folder
 config
 
