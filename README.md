@@ -1,4 +1,4 @@
-# BLACKMED - a DL MLP regression model for predicting high level music descriptors
+# BLACKMED - MLP regression model for predicting high level music descriptors
 
 Black Med is a platform initiated by Invernomuto for Manifesta 12: The Planetary Garden https://blackmed.invernomuto.info/.
 
