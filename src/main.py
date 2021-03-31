@@ -104,7 +104,6 @@ if __name__ == '__main__':
                         lowLevelFeatures, _, _, _, _, _, _ = audioFeatures.compute_dataset_features(logger, dataset,
                                                                                                     features)
                         savetxt('lowLevelFeatures/X_{}.csv'.format(dataset), lowLevelFeatures, delimiter=',')
-                        # lowLevelFeatures.to_csv('lowLevelFeatures/X_{}.csv'.format(d))
                     logger.info(
                         str(datetime.datetime.now().strftime(
                             "%Y-%m-%d %H:%M:%S")) + ' Ended low level feature extraction for'
@@ -121,8 +120,6 @@ if __name__ == '__main__':
                     X, y = preprocessing.build_x_y_regression(datasets, logger)
                 else:
                     X, y = preprocessing.build_x_y_classification(datasets, logger)
-                # preprocessing.wrapped_svm_method(X_train, X_test, y_train, y_test)
-                # X_features_training_univariance = preprocessing.univariate_selection(X, y, logger)
 
                 # 2.2 NORMALIZE DATA
                 # ------------------------------
@@ -160,9 +157,7 @@ if __name__ == '__main__':
                 train_dataset = train_dataset.batch(bs)
                 # Repeat
                 train_dataset = train_dataset.repeat()
-                # iterator = iter(train_dataset)
-                # sample, target = next(iterator)
-                # print(target)
+
                 # REPEAT FOR VALID
                 # ------------------------------
                 valid_dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test))

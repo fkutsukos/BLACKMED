@@ -6,6 +6,15 @@ import tensorflow as tf
 
 
 def create_model(input_shape, regression=False):
+    """
+    This function creates a sequential model for the MLP model. It can be either:
+     - a regression model with linear output neurons and MSE error function or
+     - a classification model with softmax output neurons and CategoricalCrossEntropy error function
+    depending on the user choice.
+    :param input_shape: the input tensor shape
+    :param regression: this variable defines if the model will be
+    :return: model: the actual MLP model to be compiled
+    """
     model = tf.keras.models.Sequential()
     SEED = 1234
     model.add(tf.keras.Input(shape=(input_shape,)))
@@ -42,6 +51,17 @@ def create_model(input_shape, regression=False):
 
 
 def train_mlp(mlp_model, train_dataset, valid_dataset, steps_per_epoch, validation_steps, logger, regression=False):
+    """
+
+    :param mlp_model: the MLP sequential model
+    :param train_dataset: the dataset that will be used for training
+    :param valid_dataset: the dataset that will be used for validation
+    :param steps_per_epoch: is the number of batches in the training data
+    :param validation_steps: is the number of valid_x, valid_y shape[0]
+    :param logger: the logger entity
+    :param regression: if true then the model will be stored in the mlp_model_regression checkpoint
+    :return:
+    """
     callbacks = []
     if regression:
         ckpt_callback = tf.keras.callbacks.ModelCheckpoint(
@@ -70,32 +90,3 @@ def train_mlp(mlp_model, train_dataset, valid_dataset, steps_per_epoch, validati
                             epochs=1000,
                             callbacks=callbacks)
     return history
-
-
-def train_gmm(Y_features, logger):
-    bic = []
-    lowest_bic = np.infty
-    best_gmm = None
-    n_init = 100
-    max_iter = 100
-    n_components_range = range(1, 12)
-    cv_types = ['spherical', 'tied', 'diag', 'full']
-    for cv_type in cv_types:
-        for n_components in n_components_range:
-            # Fit a Gaussian mixture with EM
-            gmm = mixture.GaussianMixture(n_components=n_components,
-                                          n_init=n_init,
-                                          max_iter=max_iter,
-                                          covariance_type=cv_type,
-                                          random_state=2)
-            gmm.fit(Y_features)
-            bic.append(gmm.bic(Y_features))
-            if bic[-1] < lowest_bic:
-                lowest_bic = bic[-1]
-                best_gmm = gmm
-    logger.info(
-        str(datetime.datetime.now().strftime(
-            "%Y-%m-%d %H:%M:%S")) + ' GMM covariance type "{}", with {} dimensions'.format(best_gmm.covariance_type,
-                                                                                           best_gmm.weights_.shape))
-
-    return best_gmm

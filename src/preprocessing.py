@@ -1,5 +1,3 @@
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
 from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.svm import SVC
@@ -10,27 +8,50 @@ import datetime
 import matplotlib.pyplot as plt
 import tensorflow as tf
 from sklearn.feature_selection import SelectKBest, f_classif
-from sklearn.feature_selection import VarianceThreshold
-from sklearn.feature_selection import mutual_info_regression
 import pandas as pd
 
 plt.style.use('seaborn')
 
 
 def to_cast_regression(x_, y_):
+    """
+    This functions casts the X and y data to tensorflow data types
+    :param x_: X data
+    :param y_: y data
+    :return: the casted data
+    """
     return tf.cast(x_, tf.float32), tf.cast(y_, tf.float32)
 
 
 def to_cast_classification(x_, y_):
+    """
+    This functions casts the X and y data to tensorflow data types
+    :param x_: the X data
+    :param y_: the y data
+    :return: the casted data
+    """
     return tf.cast(x_, tf.float32), tf.cast(y_, tf.uint8)
 
 
 # 1-hot encoding <- for categorical cross entropy
 def to_categorical(x_, y_):
+    """
+    Converts y data to binary class matrix.
+    :param x_: the X data are not modified
+    :param y_: the y data that are converted to one hot encoding
+    :return: the converted x,y
+    """
     return x_, tf.one_hot(y_, depth=3)
 
 
 def build_x_y_regression(datasets, logger):
+    """
+    This function builds the X, y numpy arrays in the format expected for training the model.
+    The y is loaded from user annotated .csv file
+    :param datasets: the X dataset for training
+    :param logger: the logger entity
+    :return: returns the X, y numpy arrays
+    """
     logger.info(
         str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Create X,y for Regression...')
 
@@ -50,6 +71,12 @@ def build_x_y_regression(datasets, logger):
 
 
 def build_x_y_classification(datasets, logger):
+    """
+    This function builds the X, y numpy arrays in the format expected for training the model.
+    :param datasets: the X dataset for training
+    :param logger: the logger entity
+    :return: returns the X, y numpy arrays
+    """
     logger.info(
         str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Create X,y for Classification... ')
     X = np.array([[]])
@@ -90,77 +117,3 @@ def wrapped_svm_method(X_train, X_test, y_train, y_test, logger):
 
     y_true, y_pred = y_test, grid_search.predict(X_test)
     print(classification_report(y_true, y_pred))
-
-
-def reduced_variance_selection(X_features, logger):
-    logger.info(
-        str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Reduced Variance Feature Selection ... ')
-    feature_selection_variance_model = VarianceThreshold(threshold=(.9 * (1 - .9)))
-    X_selected_features_variance = feature_selection_variance_model.fit_transform(X_features)
-
-    # mask = feature_selection_variance_model.get_support()  # list of booleans
-    print("Reduced data set shape = ", X_selected_features_variance.shape)
-    # print("     Selected features = ", X_selected_features_variance[mask])
-    return X_selected_features_variance
-
-
-def univariate_selection(X, y, logger):
-    logger.info(
-        str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Univariate Feature Selection ... ')
-
-    # apply the procedure to take the best k variables based on mutual_info_regression
-    feature_selection_univariate_model = SelectKBest(mutual_info_regression, k=3)
-
-    # fit the feature selection model and select the four variables
-    X_selected_features_univariate = feature_selection_univariate_model.fit_transform(X, y)
-
-    mask = feature_selection_univariate_model.get_support()  # list of booleans
-    print("Reduced data set shape = ", X_selected_features_univariate.shape)
-    print("     Selected features = ", mask)
-    return X_selected_features_univariate
-
-
-# def pca(X_features, n_components, logger):
-def pca_analysis(X_features):
-    # logger.info(
-    #    str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Applying PCA for {} components '.format(
-    #        n_components))
-
-    full_pca_model = PCA()
-    X_std = StandardScaler().fit_transform(X_features)
-    full_fitted_model = full_pca_model.fit(X_std)
-
-    print("Explained variance ratio: ", full_fitted_model.explained_variance_ratio_)
-    print(sum(full_fitted_model.explained_variance_ratio_[:6]))
-    plt.plot(full_fitted_model.explained_variance_ratio_, '--o')
-    plt.xticks(np.arange(0, 13, 1), labels=np.arange(1, 14, 1))
-    plt.xlabel("Feature")
-    plt.ylabel("Percentage of explained variance")
-    plt.xticks(np.arange(0, 13, 1), labels=np.arange(1, 14, 1))
-    plt.yticks(np.arange(0.0, 0.51, .1), labels=["%.0f%%" % (x * 100) for x in np.arange(0.0, 0.51, .1)])
-    plt.ylim([0.0, 0.51])
-    plt.show()
-
-
-def pca_components(X_features, dataset, logger):
-    # Preprocessing the low level features with PCA - Selecting the best 10 low level features
-    n_components = 1
-    max_n_components = X_features.shape[1]
-    model = PCA(n_components=max_n_components, whiten=True)
-    full_fitted_model = model.fit(X_features)
-    for n in range(1, max_n_components):
-        if (sum(full_fitted_model.explained_variance_ratio_[:n])) > 0.9:
-            n_components = n
-            break
-
-    model = PCA(n_components=n_components, whiten=True)
-    model.fit(X_features)
-
-    logger.info(
-        str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) +
-        ' Applying PCA for {} with {} components describing {} % of variance'.format(dataset, n_components, sum(
-            model.explained_variance_ratio_[:n_components]).round(3) * 100))
-
-    Y_features = model.transform(X_features)
-
-    return Y_features, n_components
