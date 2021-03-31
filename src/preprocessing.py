@@ -1,13 +1,8 @@
-from sklearn.model_selection import GridSearchCV
-from sklearn.pipeline import Pipeline
-from sklearn.svm import SVC
-from sklearn.metrics import classification_report
 from numpy import loadtxt
 import numpy as np
 import datetime
 import matplotlib.pyplot as plt
 import tensorflow as tf
-from sklearn.feature_selection import SelectKBest, f_classif
 import pandas as pd
 
 plt.style.use('seaborn')
@@ -93,27 +88,3 @@ def build_x_y_classification(datasets, logger):
             y = np.concatenate((y, (np.ones((X_dataset.shape[0],)) * index)), axis=0)
 
     return X, y
-
-
-def wrapped_svm_method(X_train, X_test, y_train, y_test, logger):
-    logger.info(
-        str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Wrapped method... ')
-    pipeline = Pipeline([
-        ('select', SelectKBest(score_func=f_classif)),
-        ('clf', SVC())]
-    )
-
-    param_grid = {'select__k': range(1, 12),
-                  'clf__C': [0.001, 0.1, 1, 2, 5, 10, 100],
-                  'clf__gamma': [0.0001, 0.001, 0.01, 0.1, 1.0],
-                  'clf__kernel': ['rbf']}
-
-    grid_search = GridSearchCV(pipeline, param_grid, scoring='accuracy', cv=10, n_jobs=1)
-    grid_search.fit(X_train, y_train)
-    print(grid_search.best_score_)
-    print("Best parameters set found on development set:")
-    print()
-    print(grid_search.best_params_)
-
-    y_true, y_pred = y_test, grid_search.predict(X_test)
-    print(classification_report(y_true, y_pred))
