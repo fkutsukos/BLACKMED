@@ -15,6 +15,7 @@ import updateTracks
 import numpy as np
 import tensorflow as tf
 import joblib
+import argparse
 
 PREDICT_DATASET = 'Predict'
 
@@ -49,139 +50,198 @@ training = False
 predict = False
 regression = True
 
+parser = argparse.ArgumentParser()
+parser.add_argument("--action", required=True)
+args = parser.parse_args()
+
+if args.action:
+    action = args.action
+
 if __name__ == '__main__':
     logger.info(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Starting BLCKMD')
-    while True:
-        logger.info(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' \'train\' OR \'predict\' ?')
+
+    if action == "predict":
+        predict = True
+
         try:
-            cmd = input('> : ')
-        except KeyboardInterrupt:
-            logger.info('Shutting down!')
-            break
-        if cmd == 'predict':
-            predict = True
-            try:
-                # Get tracks from Sanity
-                getTracks.get_tracks(logger)
+            # Get tracks from Sanity
+            getTracks.get_tracks(logger)
 
-                # Analyze tracks and predict high level features
-                predict_root = os.path.join('data', PREDICT_DATASET)
-                predict_files = [f for f in os.listdir(predict_root) if f.endswith(('.wav', '.mp3', '.aiff', '.m4a'))]
-                if len(predict_files) > 0:
-                    high_level_features = prediction.predict_tracks(logger, features, datasets, PREDICT_DATASET,
-                                                                    regression)
+            # Analyze tracks and predict high level features
+            predict_root = os.path.join('data', PREDICT_DATASET)
+            predict_files = [f for f in os.listdir(predict_root) if f.endswith(('.wav', '.mp3', '.aiff', '.m4a'))]
 
-                    # Update tracks on Sanity
-                    response = updateTracks.update_tracks(logger, high_level_features)
+            if len(predict_files) > 0:
+                high_level_features = prediction.predict_tracks(logger, features, datasets, PREDICT_DATASET, regression)
 
-                    # Delete downloaded tracks from the local directory
-                    if response.status_code == 200:
-                        logger.info(
-                            str(datetime.datetime.now().strftime(
-                                "%Y-%m-%d %H:%M:%S")) + ' Deleting the downloaded tracks  from local directory...')
-                        for file in predict_files:
-                            os.remove(os.path.join(predict_root, file))
-                    else:
-                        logger.error(
-                            str(datetime.datetime.now().strftime(
-                                "%Y-%m-%d %H:%M:%S")) + ' Updating Sanity failed , {}'.format(response.text))
+                # Update tracks on Sanity
+                response = updateTracks.update_tracks(logger, high_level_features)
 
-                else:
+                # Delete downloaded tracks from the local directory
+                if response.status_code == 200:
                     logger.info(
                         str(datetime.datetime.now().strftime(
-                            "%Y-%m-%d %H:%M:%S")) + ' No tracks were found on Sanity that match the query specified...')
-            except Exception as e:
-                logger.error(e)
-
-        elif cmd == 'train':
-            try:
-                # TASK 1 - Extract LLF
-                # 1.1 Iterate over the files of DYNAMICITY, DARKNESS, JAZZICITY datasets
-                # 1.2 Extract audio low level features and save as .csv files
-                if featureExtraction:
-                    # Building Labeled Features matrix for each category and then save features to csv file
-                    for index, dataset in enumerate(datasets):
-                        lowLevelFeatures, _, _, _, _, _, _ = audioFeatures.compute_dataset_features(logger, dataset,
-                                                                                                    features)
-                        savetxt('lowLevelFeatures/X_{}.csv'.format(dataset), lowLevelFeatures, delimiter=',')
-                    logger.info(
+                            "%Y-%m-%d %H:%M:%S")) + ' Deleting the downloaded tracks  from local directory...')
+                    for file in predict_files:
+                        os.remove(os.path.join(predict_root, file))
+                else:
+                    logger.error(
                         str(datetime.datetime.now().strftime(
-                            "%Y-%m-%d %H:%M:%S")) + ' Ended low level feature extraction for'
-                                                    ' training...')
-                # TASK 2 - MLP Training
+                            "%Y-%m-%d %H:%M:%S")) + ' Updating Sanity failed , {}'.format(response.text))
+            else:
                 logger.info(
-                    str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Started Training...')
+                    str(datetime.datetime.now().strftime(
+                        "%Y-%m-%d %H:%M:%S")) + ' No tracks were found on Sanity that match the query specified...')
+
+        except Exception as e:
+            logger.error(e)
+
+    elif action == 'train':
+
+        try:
+            # TASK 1 - Extract LLF
+
+            # 1.1 Iterate over the files of DYNAMICITY, DARKNESS, JAZZICITY datasets
+
+            # 1.2 Extract audio low level features and save as .csv files
+
+            if featureExtraction:
+
+                # Building Labeled Features matrix for each category and then save features to csv file
+
+                for index, dataset in enumerate(datasets):
+                    lowLevelFeatures, _, _, _, _, _, _ = audioFeatures.compute_dataset_features(logger, dataset, features)
+                    savetxt('lowLevelFeatures/X_{}.csv'.format(dataset), lowLevelFeatures, delimiter=',')
+
                 logger.info(
-                    str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Regression is set to {}'.format(regression))
+                    str(datetime.datetime.now().strftime(
+                        "%Y-%m-%d %H:%M:%S")) + ' Ended low level feature extraction for training...')
 
-                # 2.1 BUILD X,y
-                # ------------------------------
-                if regression:
-                    X, y = preprocessing.build_x_y_regression(datasets, logger)
-                else:
-                    X, y = preprocessing.build_x_y_classification(datasets, logger)
+            # TASK 2 - MLP Training
 
-                # 2.2 NORMALIZE DATA
-                # ------------------------------
-                X_scaler = MinMaxScaler().fit(X)
-                X = X_scaler.transform(X)
-                joblib.dump(X_scaler, 'scalers/X_scaler.gz')
-                if regression:
-                    y_scaler = MinMaxScaler().fit(y)
-                    y = y_scaler.transform(y)
-                    joblib.dump(y_scaler, 'scalers/y_scaler.gz')
+            logger.info(
+                str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Started Training...')
+            logger.info(
+                str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Regression is set to {}'.format(regression))
 
-                # 2.3 SPLIT DATA
-                # ------------------------------
-                # Sample training sets while holding out 20%
-                if regression:
-                    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-                else:
-                    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=y)
+            # 2.1 BUILD X,y
 
-                # 2.4 BUILD DATASETS FOR TRAINING AND TEST
-                # ------------------------------
-                train_dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train))
-                # Shuffle
-                train_dataset = train_dataset.shuffle(buffer_size=X_train.shape[0])
-                if regression:
-                    # Cast values
-                    train_dataset = train_dataset.map(preprocessing.to_cast_regression)
-                else:
-                    # Cast values
-                    train_dataset = train_dataset.map(preprocessing.to_cast_classification)
-                    # One-hot-encoding
-                    train_dataset = train_dataset.map(preprocessing.to_categorical)
-                # Divide in batches
-                bs = 32
-                train_dataset = train_dataset.batch(bs)
-                # Repeat
-                train_dataset = train_dataset.repeat()
+            # ------------------------------
 
-                # REPEAT FOR VALID
-                # ------------------------------
-                valid_dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test))
+            if regression:
 
-                if regression:
-                    valid_dataset = valid_dataset.map(preprocessing.to_cast_regression)
-                else:
-                    valid_dataset = valid_dataset.map(preprocessing.to_cast_classification)
-                    valid_dataset = valid_dataset.map(preprocessing.to_categorical)
-                valid_dataset = valid_dataset.batch(1)
-                valid_dataset = valid_dataset.repeat()
+                X, y = preprocessing.build_x_y_regression(datasets, logger)
 
-                # 2.5 CREATE MLP MODEL
-                # -------------------
-                mlp_model = train.create_model(X_train.shape[1], regression)
-                acc_per_fold = []
-                loss_per_fold = []
+            else:
 
-                # 2.6 FIT MLP
-                # -------------------
-                steps_per_epoch = int(np.ceil(X_train.shape[0] / bs))
-                validation_steps = int(X_test.shape[0])
-                train.train_mlp(mlp_model, train_dataset, valid_dataset, steps_per_epoch, validation_steps, logger,
-                                regression)
+                X, y = preprocessing.build_x_y_classification(datasets, logger)
 
-            except Exception as e:
-                logger.error(e)
+            # 2.2 NORMALIZE DATA
+
+            # ------------------------------
+
+            X_scaler = MinMaxScaler().fit(X)
+
+            X = X_scaler.transform(X)
+
+            joblib.dump(X_scaler, 'scalers/X_scaler.gz')
+
+            if regression:
+                y_scaler = MinMaxScaler().fit(y)
+
+                y = y_scaler.transform(y)
+
+                joblib.dump(y_scaler, 'scalers/y_scaler.gz')
+
+            # 2.3 SPLIT DATA
+
+            # ------------------------------
+
+            # Sample training sets while holding out 20%
+
+            if regression:
+
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+            else:
+
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=y)
+
+            # 2.4 BUILD DATASETS FOR TRAINING AND TEST
+
+            # ------------------------------
+
+            train_dataset = tf.data.Dataset.from_tensor_slices((X_train, y_train))
+
+            # Shuffle
+
+            train_dataset = train_dataset.shuffle(buffer_size=X_train.shape[0])
+
+            if regression:
+
+                # Cast values
+
+                train_dataset = train_dataset.map(preprocessing.to_cast_regression)
+
+            else:
+
+                # Cast values
+
+                train_dataset = train_dataset.map(preprocessing.to_cast_classification)
+
+                # One-hot-encoding
+
+                train_dataset = train_dataset.map(preprocessing.to_categorical)
+
+            # Divide in batches
+
+            bs = 32
+
+            train_dataset = train_dataset.batch(bs)
+
+            # Repeat
+
+            train_dataset = train_dataset.repeat()
+
+            # REPEAT FOR VALID
+
+            # ------------------------------
+
+            valid_dataset = tf.data.Dataset.from_tensor_slices((X_test, y_test))
+
+            if regression:
+
+                valid_dataset = valid_dataset.map(preprocessing.to_cast_regression)
+
+            else:
+
+                valid_dataset = valid_dataset.map(preprocessing.to_cast_classification)
+
+                valid_dataset = valid_dataset.map(preprocessing.to_categorical)
+
+            valid_dataset = valid_dataset.batch(1)
+
+            valid_dataset = valid_dataset.repeat()
+
+            # 2.5 CREATE MLP MODEL
+
+            # -------------------
+
+            mlp_model = train.create_model(X_train.shape[1], regression)
+
+            acc_per_fold = []
+
+            loss_per_fold = []
+
+            # 2.6 FIT MLP
+
+            # -------------------
+
+            steps_per_epoch = int(np.ceil(X_train.shape[0] / bs))
+
+            validation_steps = int(X_test.shape[0])
+
+            train.train_mlp(mlp_model, train_dataset, valid_dataset, steps_per_epoch, validation_steps, logger, regression)
+
+        except Exception as e:
+            logger.error(e)

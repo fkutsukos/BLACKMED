@@ -16,11 +16,11 @@ def get_tracks(logger):
 
 
     logger.info(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Querying Sanity for new tracks...')
-    query = '*[_type == "track" && !(_id in path("drafts.**")) && _updatedAt < \'' + dt.shift(hours=-1).isoformat() + '\'  ]{ ..., "file": file.asset->{url, mimeType} }[0...50]'
+    # query = '*[_type == "track" && !(_id in path("drafts.**")) && _updatedAt < \'' + dt.shift(hours=-1).isoformat() + '\'  ]{ ..., "file": file.asset->{url, mimeType} }[0...50]'
     # query = '*[_type == "track" && !(_id in path("drafts.**")) && algorithm.hasBeat == false]{ ..., "file": file.asset->{url, mimeType} }'
     # query = '*[_type == "track" && !(_id in path("drafts.**")) && algorithm.lufs]{ ..., "file": file.asset->{url, mimeType} }'
-    # query = '*[_type == "track" && !(_id in path("drafts.**")) && !defined(algorithm.lufs)]{ ..., "file": file.asset->{url, mimeType} }'
-    logger.info(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' with query: ' + query)
+    query = '*[_type == "track" && !(_id in path("drafts.**")) && !defined(algorithm.lufs)]{ ..., "file": file.asset->{url, mimeType} }'
+    # logger.info(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' with query: ' + query)
     query = urllib.parse.quote(query)
     url = "https://t0ciza9b.api.sanity.io/v1/data/query/production?query=" + query
 
@@ -37,12 +37,12 @@ def get_tracks(logger):
 
     logger.info(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Number of tracks to update {}...'.format(
         len(json_data['result'])))
-    logger.info(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Downloading...')
     n_tracks = len(json_data['result'])
-    for index, track in enumerate(json_data['result']):
-        urllib.request.urlretrieve(track['file']['url'],
-                                   'data/Predict/{}.{}'.format(track['_id'], track['file']['url'].split('.')[-1]))
-        if (index+1) % 10 == 0 and index != 0:
-            logger.info(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Downloaded ' + f'{index+1} out of ' + f'{n_tracks} tracks')
+    if n_tracks > 0:
+        logger.info(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Downloading...')
+        for index, track in enumerate(json_data['result']):
+            urllib.request.urlretrieve(track['file']['url'], 'data/Predict/{}.{}'.format(track['_id'], track['file']['url'].split('.')[-1]))
+            if (index+1) % 10 == 0 and index != 0:
+                logger.info(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Downloaded ' + f'{index+1} out of ' + f'{n_tracks} tracks')
 
-    logger.info(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Downloading tracks complete...')
+        logger.info(str(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")) + ' Downloading tracks complete...')
